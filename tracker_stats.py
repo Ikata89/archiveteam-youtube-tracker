@@ -21,8 +21,17 @@ INTERVAL_SECONDS = 5 * 60
 FIELDNAMES = ["timestamp", "claims", "done", "todo", "total"]
 
 
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    )
+}
+
+
 def fetch_stats() -> dict:
-    resp = requests.get(STATS_URL, timeout=30)
+    resp = requests.get(STATS_URL, headers=HEADERS, timeout=30)
     resp.raise_for_status()
     data = resp.json()
 
