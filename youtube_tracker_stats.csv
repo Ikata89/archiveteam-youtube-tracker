@@ -1,4 +1,4 @@
-timestamp,claims,done,todo,total,ikata_items,ikata_bytes
+timestamp,claims,done,todo,total,ikata_items,ikata_bytes,ikata_rank,days_to_top20,days_to_top5,days_to_top1
 2026-06-02T08:02:15Z,925486,48510231,0,49435717,,
 2026-06-02T08:02:26Z,925477,48510232,0,49435709,,
 02/06/2026 08:04:17,925387,48510259,0,49435646,,

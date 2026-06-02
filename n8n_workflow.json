@@ -32,16 +32,6 @@
     },
     {
       "parameters": {
-        "jsCode": "const d = $input.first().json;\nconst now = new Date();\nconst p = n => String(n).padStart(2, '0');\nconst timestamp = `${p(now.getDate())}/${p(now.getMonth()+1)}/${now.getFullYear()} ${p(now.getHours())}:${p(now.getMinutes())}:${p(now.getSeconds())}`;\n\nconst ikataItems = (d.downloader_count || {})['Ikata'] ?? '';\nconst ikataBytes = (d.downloader_bytes || {})['Ikata'] ?? '';\n\nreturn [{\n  json: {\n    timestamp,\n    claims:      d.total_items_out,\n    done:        d.total_items_done,\n    todo:        d.total_items_todo,\n    total:       d.total_items,\n    ikata_items: ikataItems,\n    ikata_bytes: ikataBytes,\n    newRow: `${timestamp},${d.total_items_out},${d.total_items_done},${d.total_items_todo},${d.total_items},${ikataItems},${ikataBytes}\\n`\n  }\n}];"
-      },
-      "id": "33333333-3333-3333-3333-333333333333",
-      "name": "Format Row",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [680, 300]
-    },
-    {
-      "parameters": {
         "method": "GET",
         "url": "https://api.github.com/repos/Ikata89/archiveteam-youtube-tracker/contents/youtube_tracker_stats.csv",
         "sendHeaders": true,
@@ -63,17 +53,17 @@
       "name": "Get CSV from GitHub",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [900, 300]
+      "position": [680, 300]
     },
     {
       "parameters": {
-        "jsCode": "const file   = $input.first().json;\nconst newRow = $('Format Row').first().json.newRow;\nconst ts     = $('Format Row').first().json.timestamp;\n\nconst existing = Buffer.from(file.content.replace(/\\n/g, ''), 'base64').toString('utf8');\nconst updated  = existing.trimEnd() + '\\n' + newRow;\n\nreturn [{\n  json: {\n    sha:     file.sha,\n    content: Buffer.from(updated).toString('base64'),\n    message: `stats: ${ts}`\n  }\n}];"
+        "jsCode": "const stats   = $('Fetch Tracker Stats').first().json;\nconst csvFile = $input.first().json;\n\n// Timestamp\nconst now = new Date();\nconst p   = n => String(n).padStart(2, '0');\nconst timestamp = `${p(now.getDate())}/${p(now.getMonth()+1)}/${now.getFullYear()} ${p(now.getHours())}:${p(now.getMinutes())}:${p(now.getSeconds())}`;\n\n// Global stats\nconst claims = stats.total_items_out;\nconst done   = stats.total_items_done;\nconst todo   = stats.total_items_todo;\nconst total  = stats.total_items;\n\n// Ikata stats\nconst db         = stats.downloader_bytes || {};\nconst dc         = stats.downloader_count || {};\nconst ikataBytes = db['Ikata'] ?? null;\nconst ikataItems = dc['Ikata'] ?? null;\n\n// Rank\nconst sortedBytes  = Object.values(db).sort((a, b) => b - a);\nconst ikataRank    = sortedBytes.filter(b => b > (ikataBytes || 0)).length + 1;\nconst top20Thresh  = sortedBytes[19] ?? null;\nconst top5Thresh   = sortedBytes[4]  ?? null;\nconst top1Thresh   = sortedBytes[0]  ?? null;\n\n// Rate from CSV history\nconst existing = Buffer.from(csvFile.content.replace(/\\n/g, ''), 'base64').toString('utf8');\nconst lines    = existing.trim().split('\\n');\nconst colNames = lines[0].split(',');\nconst tsIdx    = colNames.indexOf('timestamp');\nconst byteIdx  = colNames.indexOf('ikata_bytes');\n\nlet ratePerDay = null;\nif (byteIdx >= 0 && tsIdx >= 0) {\n  const parseTs = s => {\n    s = s.trim();\n    if (s.includes('/')) {\n      const [date, time = '00:00:00'] = s.split(' ');\n      const [d, m, y] = date.split('/');\n      return new Date(`${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}T${time.padStart(8,'0')}`);\n    }\n    return new Date(s);\n  };\n  const points = lines.slice(1)\n    .map(l => l.split(','))\n    .filter(c => c[byteIdx] && c[byteIdx].trim() && !isNaN(Number(c[byteIdx])))\n    .map(c => ({ ts: parseTs(c[tsIdx]), bytes: Number(c[byteIdx]) }))\n    .filter(pt => !isNaN(pt.ts.getTime()));\n  if (points.length >= 2) {\n    const elapsedSec  = (points[points.length-1].ts - points[0].ts) / 1000;\n    const bytesGained = points[points.length-1].bytes - points[0].bytes;\n    if (elapsedSec > 0) ratePerDay = bytesGained / elapsedSec * 86400;\n  }\n}\n\n// ETA (days, static competitors assumption)\nconst etaDays = target => {\n  if (!target || !ratePerDay || ratePerDay <= 0 || !ikataBytes) return '';\n  if (ikataBytes >= target) return '0';\n  return ((target - ikataBytes) / ratePerDay).toFixed(1);\n};\n\nconst daysToTop20 = etaDays(top20Thresh);\nconst daysToTop5  = etaDays(top5Thresh);\nconst daysToTop1  = etaDays(top1Thresh);\n\n// Check/update CSV header if new columns are missing\nconst expectedHeader = 'timestamp,claims,done,todo,total,ikata_items,ikata_bytes,ikata_rank,days_to_top20,days_to_top5,days_to_top1';\nlet csvBody = existing;\nif (lines[0].trim() !== expectedHeader) {\n  const dataLines = lines.slice(1);\n  csvBody = expectedHeader + '\\n' + dataLines.join('\\n');\n}\n\n// Append new row\nconst newRow = [timestamp, claims, done, todo, total, ikataItems ?? '', ikataBytes ?? '', ikataRank, daysToTop20, daysToTop5, daysToTop1].join(',') + '\\n';\nconst updated = csvBody.trimEnd() + '\\n' + newRow;\n\nreturn [{\n  json: {\n    sha:     csvFile.sha,\n    content: Buffer.from(updated).toString('base64'),\n    message: `stats: ${timestamp}`\n  }\n}];"
       },
       "id": "55555555-5555-5555-5555-555555555555",
-      "name": "Append Row",
+      "name": "Process and Append",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1120, 300]
+      "position": [900, 300]
     },
     {
       "parameters": {
@@ -101,7 +91,7 @@
       "name": "Update CSV on GitHub",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1340, 300]
+      "position": [1120, 300]
     }
   ],
   "connections": {
@@ -109,15 +99,12 @@
       "main": [[{"node": "Fetch Tracker Stats", "type": "main", "index": 0}]]
     },
     "Fetch Tracker Stats": {
-      "main": [[{"node": "Format Row", "type": "main", "index": 0}]]
-    },
-    "Format Row": {
       "main": [[{"node": "Get CSV from GitHub", "type": "main", "index": 0}]]
     },
     "Get CSV from GitHub": {
-      "main": [[{"node": "Append Row", "type": "main", "index": 0}]]
+      "main": [[{"node": "Process and Append", "type": "main", "index": 0}]]
     },
-    "Append Row": {
+    "Process and Append": {
       "main": [[{"node": "Update CSV on GitHub", "type": "main", "index": 0}]]
     }
   },
