@@ -2,8 +2,6 @@ name: Track YouTube Stats
 # Polls tracker.archiveteam.org/youtube/ every 5 minutes and commits the CSV.
 
 on:
-  schedule:
-    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 permissions:

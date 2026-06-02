@@ -1,0 +1,129 @@
+{
+  "name": "ArchiveTeam YouTube Stats Tracker",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "id": "11111111-1111-1111-1111-111111111111",
+      "name": "Every 5 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://v1.api.tracker.archiveteam.org/youtube/stats.json",
+        "options": {}
+      },
+      "id": "22222222-2222-2222-2222-222222222222",
+      "name": "Fetch Tracker Stats",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $input.first().json;\nconst now = new Date();\nconst p = n => String(n).padStart(2, '0');\nconst timestamp = `${p(now.getDate())}/${p(now.getMonth()+1)}/${now.getFullYear()} ${p(now.getHours())}:${p(now.getMinutes())}:${p(now.getSeconds())}`;\n\nreturn [{\n  json: {\n    timestamp,\n    claims: d.total_items_out,\n    done:   d.total_items_done,\n    todo:   d.total_items_todo,\n    total:  d.total_items,\n    newRow: `${timestamp},${d.total_items_out},${d.total_items_done},${d.total_items_todo},${d.total_items}\\n`\n  }\n}];"
+      },
+      "id": "33333333-3333-3333-3333-333333333333",
+      "name": "Format Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.github.com/repos/Ikata89/archiveteam-youtube-tracker/contents/youtube_tracker_stats.csv",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "token YOUR_GITHUB_PAT_HERE"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "44444444-4444-4444-4444-444444444444",
+      "name": "Get CSV from GitHub",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const file   = $input.first().json;\nconst newRow = $('Format Row').first().json.newRow;\nconst ts     = $('Format Row').first().json.timestamp;\n\nconst existing = Buffer.from(file.content.replace(/\\n/g, ''), 'base64').toString('utf8');\nconst updated  = existing.trimEnd() + '\\n' + newRow;\n\nreturn [{\n  json: {\n    sha:     file.sha,\n    content: Buffer.from(updated).toString('base64'),\n    message: `stats: ${ts}`\n  }\n}];"
+      },
+      "id": "55555555-5555-5555-5555-555555555555",
+      "name": "Append Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "https://api.github.com/repos/Ikata89/archiveteam-youtube-tracker/contents/youtube_tracker_stats.csv",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "token YOUR_GITHUB_PAT_HERE"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ message: $json.message, content: $json.content, sha: $json.sha }) }}",
+        "options": {}
+      },
+      "id": "66666666-6666-6666-6666-666666666666",
+      "name": "Update CSV on GitHub",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1340, 300]
+    }
+  ],
+  "connections": {
+    "Every 5 Minutes": {
+      "main": [[{"node": "Fetch Tracker Stats", "type": "main", "index": 0}]]
+    },
+    "Fetch Tracker Stats": {
+      "main": [[{"node": "Format Row", "type": "main", "index": 0}]]
+    },
+    "Format Row": {
+      "main": [[{"node": "Get CSV from GitHub", "type": "main", "index": 0}]]
+    },
+    "Get CSV from GitHub": {
+      "main": [[{"node": "Append Row", "type": "main", "index": 0}]]
+    },
+    "Append Row": {
+      "main": [[{"node": "Update CSV on GitHub", "type": "main", "index": 0}]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": []
+}
