@@ -32,7 +32,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const d = $input.first().json;\nconst now = new Date();\nconst p = n => String(n).padStart(2, '0');\nconst timestamp = `${p(now.getDate())}/${p(now.getMonth()+1)}/${now.getFullYear()} ${p(now.getHours())}:${p(now.getMinutes())}:${p(now.getSeconds())}`;\n\nreturn [{\n  json: {\n    timestamp,\n    claims: d.total_items_out,\n    done:   d.total_items_done,\n    todo:   d.total_items_todo,\n    total:  d.total_items,\n    newRow: `${timestamp},${d.total_items_out},${d.total_items_done},${d.total_items_todo},${d.total_items}\\n`\n  }\n}];"
+        "jsCode": "const d = $input.first().json;\nconst now = new Date();\nconst p = n => String(n).padStart(2, '0');\nconst timestamp = `${p(now.getDate())}/${p(now.getMonth()+1)}/${now.getFullYear()} ${p(now.getHours())}:${p(now.getMinutes())}:${p(now.getSeconds())}`;\n\nconst ikataItems = (d.downloader_count || {})['Ikata'] ?? '';\nconst ikataBytes = (d.downloader_bytes || {})['Ikata'] ?? '';\n\nreturn [{\n  json: {\n    timestamp,\n    claims:      d.total_items_out,\n    done:        d.total_items_done,\n    todo:        d.total_items_todo,\n    total:       d.total_items,\n    ikata_items: ikataItems,\n    ikata_bytes: ikataBytes,\n    newRow: `${timestamp},${d.total_items_out},${d.total_items_done},${d.total_items_todo},${d.total_items},${ikataItems},${ikataBytes}\\n`\n  }\n}];"
       },
       "id": "33333333-3333-3333-3333-333333333333",
       "name": "Format Row",

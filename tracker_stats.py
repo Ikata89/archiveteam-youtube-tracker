@@ -18,7 +18,7 @@ STATS_URL = "https://v1.api.tracker.archiveteam.org/youtube/stats.json"
 CSV_FILE = Path(__file__).parent / "youtube_tracker_stats.csv"
 INTERVAL_SECONDS = 5 * 60
 
-FIELDNAMES = ["timestamp", "claims", "done", "todo", "total"]
+FIELDNAMES = ["timestamp", "claims", "done", "todo", "total", "ikata_items", "ikata_bytes"]
 
 
 HEADERS = {
@@ -37,12 +37,17 @@ def fetch_stats() -> dict:
     resp.raise_for_status()
     data = resp.json()
 
-    claims = data.get("total_items_out")   # items currently checked out / in-progress
+    claims = data.get("total_items_out")
     done   = data.get("total_items_done")
     todo   = data.get("total_items_todo")
     total  = data.get("total_items")
+    ikata_items = data.get("downloader_count", {}).get("Ikata")
+    ikata_bytes = data.get("downloader_bytes", {}).get("Ikata")
 
-    return {"claims": claims, "done": done, "todo": todo, "total": total}
+    return {
+        "claims": claims, "done": done, "todo": todo, "total": total,
+        "ikata_items": ikata_items, "ikata_bytes": ikata_bytes,
+    }
 
 
 def ensure_csv_header():
@@ -61,6 +66,7 @@ def append_row(stats: dict):
     print(
         f"[{row['timestamp']}]  claims={row['claims']:>10,}  done={row['done']:>10,}"
         f"  todo={row['todo']:>10,}  total={row['total']:>10,}"
+        f"  ikata_items={row['ikata_items']:>8,}  ikata_bytes={row['ikata_bytes']:>18,}"
     )
 
 
